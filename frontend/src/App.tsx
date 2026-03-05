@@ -30,14 +30,8 @@ function App() {
             <Route path="/register" element={<RegisterView />} />
             <Route path="/dashboard" element={<DashboardView />} />
             <Route path="/results" element={<ResultsView />} />
+            <Route path="/results/:id" element={<ResultsView />} />
             <Route path="/simulation/:organ?" element={<SimulationView />} />
-
-            {/*
-             Completar rutas dinámicas para resultados individuales:
-
-            <Route path="/results/:id" element={<ResultsPage />} />
-
-             */}
             <Route path="/settings" element={<SettingsView />} />
           </Routes>
         </Router>

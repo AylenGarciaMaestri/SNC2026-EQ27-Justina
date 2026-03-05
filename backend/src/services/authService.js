@@ -45,14 +45,15 @@ export const login = async ({ email, password }) => {
   if (!valid) throw new Error('Invalid credentials');
 
   const token = jwt.sign(
-    { id: user.id },
+    { id: user.id , full_name: user.full_name },
+    
     process.env.JWT_SECRET,
     { expiresIn: '8h' }
   );
-
+  
   // Actualizar último login
   await userRepository.updateLastLogin(user.id);
 
-  return { token , userId: user.id };
+  return { token, userId: user.id, fullName: user.full_name };
 };
 

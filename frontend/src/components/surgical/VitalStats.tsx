@@ -1,5 +1,7 @@
 import { Activity, Heart, Thermometer, Timer } from "lucide-react";
+import { useParams } from "react-router-dom";
 import { useSimulation } from "../../contexts/SimulationContext";
+import { getOrganBySlug } from "../../lib/organData";
 
 function formatTime(totalSeconds: number) {
   const mins = Math.floor(totalSeconds / 60);
@@ -7,15 +9,20 @@ function formatTime(totalSeconds: number) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+const DEFAULT_VITALS = { fc: "78", spo2: "97", temp: "36.5" };
+
 export function VitalStats() {
   const { elapsedSeconds } = useSimulation();
+  const { organ } = useParams<{ organ: string }>();
+
+  const vitals = (organ ? getOrganBySlug(organ)?.vitals : undefined) ?? DEFAULT_VITALS;
 
   // Cambiamos las clases personalizadas por colores estándar de Tailwind con efecto "Glow"
   const stats = [
     { 
       icon: Heart, 
       label: "FC", 
-      value: "72", 
+      value: vitals.fc, 
       unit: "bpm", 
       color: "text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]",
       animate: "animate-pulse" // El corazón late
@@ -23,7 +30,7 @@ export function VitalStats() {
     { 
       icon: Activity, 
       label: "SpO₂", 
-      value: "98", 
+      value: vitals.spo2, 
       unit: "%", 
       color: "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]",
       animate: ""
@@ -31,7 +38,7 @@ export function VitalStats() {
     { 
       icon: Thermometer, 
       label: "Temp", 
-      value: "36.5", 
+      value: vitals.temp, 
       unit: "°C", 
       color: "text-amber-500 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]",
       animate: ""

@@ -48,6 +48,10 @@ const Navbar: FC<NavbarProps> = () => {
     } catch (error) {
       console.error('Error during logout:', error);
     } finally {
+      // Limpiar todos los datos del usuario del localStorage
+      localStorage.removeItem('justina_user');
+      localStorage.removeItem('justina_last_run');
+      localStorage.removeItem('justina_run_history');
       navigate('/login');
     }
   };

@@ -2,14 +2,9 @@ import { useState } from "react";
 import { Settings, Save, Play, Pause, RotateCcw, LayoutDashboard, Flag, CheckCircle, BarChart } from "lucide-react";
 import { useSimulation } from "../../contexts/SimulationContext";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { useNavigate, useLocation } from "react-router-dom";
-
-const simulations = [
-  { id: "kidney", path: "/simulation/kidney-uturing" },
-  { id: "liver", path: "/simulation/liver-resection" },
-  { id: "gastric", path: "/simulation/gastric-bypass" },
-  { id: "esophagectomy", path: "/simulation/esophagectomy" },
-];
+import { useNavigate, useParams } from "react-router-dom";
+import { getOrganBySlug } from "../../lib/organData";
+import { useRunHistory } from "../../hooks/useRunHistory";
 
 function formatTime(totalSeconds: number) {
   const hrs = Math.floor(totalSeconds / 3600);
@@ -24,14 +19,14 @@ function formatTime(totalSeconds: number) {
 export function TopToolbar() {
   const { isPlaying, togglePlay, resetTimer, elapsedSeconds } = useSimulation();
   const navigate = useNavigate();
-  const location = useLocation();
-  
-  // ESTADO NUEVO: Controla si el modal de éxito está visible
+  const { organ } = useParams<{ organ: string }>();
+  const { saveRun } = useRunHistory();
+
+  // ESTADO: Controla si el modal de éxito está visible
   const [showFinishModal, setShowFinishModal] = useState(false);
 
-  // Identificamos el ID de la simulación actual de forma global en el componente
-  const currentSim = simulations.find(sim => sim.path === location.pathname);
-  const simulationId = currentSim ? currentSim.id : "unknown";
+  // Resolvemos los datos del órgano actual desde el slug de la URL
+  const organData = organ ? getOrganBySlug(organ) : undefined;
 
   const btnStyle = "flex items-center justify-center w-9 h-9 rounded-lg bg-slate-800/80 border border-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-cyan-400 hover:border-cyan-500/50 transition-all";
 
@@ -41,16 +36,26 @@ export function TopToolbar() {
       togglePlay();
     }
 
-    // 2. Guardamos en LocalStorage
-    const simulationResult = {
-      id: simulationId,
-      timeInSeconds: elapsedSeconds,
-      formattedTime: formatTime(elapsedSeconds),
-      timestamp: new Date().toISOString()
-    };
-    localStorage.setItem('lastSimulationResult', JSON.stringify(simulationResult));
+    // 2. Leemos el nombre del cirujano desde localStorage
+    const userRaw = localStorage.getItem("justina_user");
+    const cirujano: string = userRaw
+      ? (JSON.parse(userRaw) as { nombre: string }).nombre ?? "Desconocido"
+      : "Desconocido";
 
-    // 3. Mostramos el Modal en lugar de navegar
+    // 3. Construimos el RunResult con el modelo de datos acordado
+    const run = {
+      id: organData?.id ?? "kidney",
+      fecha: new Date().toISOString(),
+      duracion: elapsedSeconds,
+      puntaje: Math.floor(Math.random() * 35) + 65,
+      signosVitales: organData?.vitals ?? { fc: "78", spo2: "97", temp: "36.5" },
+      cirujano,
+    } as const;
+
+    // 4. Guardamos en localStorage (last_run + historial)
+    saveRun(run);
+
+    // 5. Mostramos el modal de éxito
     setShowFinishModal(true);
   };
 
@@ -181,9 +186,9 @@ export function TopToolbar() {
               </span>
             </div>
 
-            {/* BOTÓN HACIA RESULTADOS (Utiliza el ID dinámico) */}
+            {/* BOTÓN HACIA RESULTADOS (Utiliza el ID del órgano actual) */}
             <button 
-              onClick={() => navigate(`/results/${simulationId}`)}
+              onClick={() => navigate(`/results/${organData?.id ?? "kidney"}`)}
               className="w-full flex items-center justify-center gap-2 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl transition-all shadow-[0_0_15px_rgba(8,145,178,0.4)] hover:shadow-[0_0_25px_rgba(8,145,178,0.6)] active:scale-[0.98]"
             >
               <BarChart className="w-5 h-5" />
