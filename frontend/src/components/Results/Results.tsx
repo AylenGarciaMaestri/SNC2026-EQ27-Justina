@@ -1,10 +1,24 @@
-import { useState } from "react";
-import type { FC } from "react";
+import { useState, useEffect, type FC } from "react";
 import { Link } from "react-router-dom";
 import { 
   ArrowLeft, Clock, Activity, User, 
-  Calendar, Trash2, Award, ClipboardList 
+  Calendar, Trash2, Award, ClipboardList, Loader2
 } from "lucide-react";
+
+import kidneyImg from "../../assets/surgical/organ-kidney.png";
+import liverImg from "../../assets/surgical/organ-liver.png";
+import gastricImg from "../../assets/surgical/organ-gastric.jpg";
+import esophagectomyImg from "../../assets/surgical/organ-esophagus.jpg";
+
+/** Maps scenario UUID (seed data) → display info */
+const SCENARIO_MAP: Record<string, { label: string; image: string }> = {
+  "33333333-3333-3333-3333-333333333333": { label: "Kidney Suturing",   image: kidneyImg },
+  "44444444-4444-4444-4444-444444444444": { label: "Liver Resection",   image: liverImg },
+  "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee": { label: "Prostatectomy",     image: liverImg },
+  "ffffffff-ffff-ffff-ffff-ffffffffffff": { label: "Gastric Bypass",    image: gastricImg },
+  "12121212-1212-1212-1212-121212121212": { label: "Colon Anastomosis", image: gastricImg },
+  "34343434-3434-3434-3434-343434343434": { label: "Esophagectomy",     image: esophagectomyImg },
+};
 
 interface SimulationResult {
   sessionId: string;
@@ -14,11 +28,21 @@ interface SimulationResult {
   fecha: string;
   duracion: number;
   puntaje: number;
-  signosVitales: string;
+  signosVitales: { fc: string; spo2: string; temp: string };
   cirujano: string;
 }
 
 const STORAGE_KEY = "simulation_results";
+
+/** Shape returned by GET /api/runs/me */
+interface ApiRun {
+  id: string;
+  scenario_id: string;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  config: { puntaje?: number; signosVitales?: { fc: string; spo2: string; temp: string } } | null;
+}
 
 // Funciones de ayuda para formatear datos
 const formatTime = (totalSeconds: number) => {
@@ -34,20 +58,67 @@ const getScoreStyles = (score: number) => {
 };
 
 const Results: FC = () => {
-  // Inicialización perezosa para evitar el warning de setState en useEffect
-  const [results, setResults] = useState<SimulationResult[]>(() => {
-    try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      console.error("Error reading from localStorage", error);
-      return [];
-    }
-  });
+  const [results, setResults] = useState<SimulationResult[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Función para borrar el historial
+  useEffect(() => {
+    const fetchResults = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch("http://localhost:3000/api/runs/me", {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const runs: ApiRun[] = await res.json();
+        const userName = localStorage.getItem("auth_user_name") ?? "Dr. Invitado";
+
+        // Only show COMPLETED runs that have result data
+        const mapped: SimulationResult[] = runs
+          .filter(r => r.status === "COMPLETED")
+          .map(r => {
+            const scenario = SCENARIO_MAP[r.scenario_id];
+            const cfg = r.config ?? {};
+            const durationSec = r.ended_at
+              ? Math.round((new Date(r.ended_at).getTime() - new Date(r.started_at).getTime()) / 1000)
+              : 0;
+            return {
+              sessionId: r.id,
+              id: r.id,
+              label: scenario?.label ?? "Procedimiento Desconocido",
+              image: scenario?.image ?? "",
+              fecha: r.started_at,
+              duracion: durationSec,
+              puntaje: cfg.puntaje ?? 0,
+              signosVitales: cfg.signosVitales ?? { fc: "--", spo2: "--", temp: "--" },
+              cirujano: userName,
+            };
+          });
+
+        setResults(mapped);
+      } catch (err) {
+        console.warn("[Results] API fetch failed, falling back to localStorage:", err);
+        setError("No se pudo conectar con el servidor. Mostrando historial local.");
+        // Fallback to localStorage
+        try {
+          const data = localStorage.getItem(STORAGE_KEY);
+          setResults(data ? JSON.parse(data) : []);
+        } catch {
+          setResults([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResults();
+  }, []);
+
+  // Clear only the localStorage backup (DB records persist on the server)
   const handleClearHistory = () => {
-    if (window.confirm("¿Estás seguro de que deseas borrar todo el historial médico?")) {
+    if (window.confirm("¿Estás seguro de que deseas borrar el historial local? Los registros en el servidor no se eliminarán.")) {
       localStorage.removeItem(STORAGE_KEY);
       setResults([]);
     }
@@ -77,7 +148,7 @@ const Results: FC = () => {
           </div>
 
           {/* Botón Limpiar Historial */}
-          {results.length > 0 && (
+          {!loading && results.length > 0 && (
             <button 
               onClick={handleClearHistory}
               className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 hover:border-rose-400 text-rose-400 rounded-lg transition-all text-sm font-bold"
@@ -88,8 +159,23 @@ const Results: FC = () => {
           )}
         </div>
 
+        {/* ESTADO: Cargando */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-400">
+            <Loader2 className="w-10 h-10 animate-spin text-cyan-500" />
+            <span className="text-sm font-medium tracking-wide">Cargando historial desde el servidor...</span>
+          </div>
+        )}
+
+        {/* AVISO: Fallback a localStorage */}
+        {!loading && error && (
+          <div className="mb-6 px-4 py-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl text-sm font-medium flex items-center gap-2">
+            <span>⚠</span> {error}
+          </div>
+        )}
+
         {/* ESTADO VACÍO */}
-        {results.length === 0 && (
+        {!loading && results.length === 0 && (
           <div className="bg-slate-900 border border-slate-800 border-dashed rounded-3xl p-12 text-center flex flex-col items-center justify-center shadow-xl">
             <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4">
               <ClipboardList className="w-10 h-10 text-slate-600" />
@@ -108,7 +194,7 @@ const Results: FC = () => {
         )}
 
         {/* GRID DE RESULTADOS */}
-        {results.length > 0 && (
+        {!loading && results.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {results.map((r) => (
               <div
@@ -178,8 +264,8 @@ const Results: FC = () => {
                         <Activity className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-bold uppercase tracking-wider">Vitales</span>
                       </div>
-                      <span className="text-sm font-medium text-slate-300 truncate">
-                        {r.signosVitales}
+                      <span className="text-sm font-medium text-slate-300">
+                        {`FC ${r.signosVitales.fc} · SpO₂ ${r.signosVitales.spo2}% · ${r.signosVitales.temp}°C`}
                       </span>
                     </div>
 
