@@ -153,8 +153,8 @@ export const generateReport = async (runId) => {
         id: e.id,
         type: e.event_type,
         severity: e.severity,
-        timestamp: e.timestamp,
-        details: e.details
+        timestamp: e.event_time,
+        details: e.payload
       }))
     },
     summary: {

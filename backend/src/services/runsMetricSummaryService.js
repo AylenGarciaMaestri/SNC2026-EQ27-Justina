@@ -9,7 +9,7 @@ export const computeAndSaveSummary = async (runId) => {
   const scenario = await scenarioRepository.getScenarioById(run.scenario_id);
 
   const totalTime =
-    (new Date(run.ended_at) - new Date(run.started_at)) / 1000;
+    Math.round((new Date(run.ended_at) - new Date(run.started_at)) / 1000);
 
   const errorsTotal = events.filter(
     e => ["error", "critical"].includes(e.severity)
@@ -19,20 +19,25 @@ export const computeAndSaveSummary = async (runId) => {
     e => e.severity === "critical"
   ).length;
 
-  const timeScore =
-    scenario.expected_time_seconds / totalTime;
+  // Guard: avoid division by zero or NaN if totalTime is 0 or expectedTime is missing
+  const expectedTime = scenario?.expected_time_seconds ?? 0;
+  const safeTotalTime = totalTime > 0 ? totalTime : 1;
+  const timeScore = expectedTime > 0 ? expectedTime / safeTotalTime : 1;
 
   const penalty = errorsTotal * 0.05;
 
-  const finalScore = Math.max(0, timeScore - penalty);
+  // Cap score to 1.0 (can't exceed perfect) and floor at 0
+  const finalScore = Math.min(1.0, Math.max(0, timeScore - penalty));
 
   await runMetricSummaryRepository.createRunMetricSummary({
     runId,
-    totalTime,
+    totalTime: safeTotalTime,
     errorsTotal,
     criticalErrors,
     score: finalScore
   });
+
+  return { runId, totalTime: safeTotalTime, errorsTotal, criticalErrors, score: finalScore };
 };
 
 export const getRunSummary = async (runId) => {
