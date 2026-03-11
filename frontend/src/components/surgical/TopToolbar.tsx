@@ -28,11 +28,12 @@ function formatTime(totalSeconds: number) {
 }
 
 export function TopToolbar() {
-  const { isPlaying, togglePlay, resetTimer, elapsedSeconds } = useSimulation();
+  const { isPlaying, togglePlay, resetTimer, elapsedSeconds, vitalSigns, runId, dbStartRun, dbFinishRun } = useSimulation();
   const navigate = useNavigate();
   const location = useLocation();
   
   const [showFinishModal, setShowFinishModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   // 🛡️ NUEVA MEMORIA: Rastrea si ya guardamos los datos de esta partida
   const [hasSavedThisSession, setHasSavedThisSession] = useState(false);
@@ -41,11 +42,24 @@ export function TopToolbar() {
 
   // Función envuelta para reiniciar también la memoria de guardado
   const handleResetSimulation = () => {
-    resetTimer();
-    setHasSavedThisSession(false); // Permite guardar de nuevo si reinician la cirugía
+    resetTimer(); // also resets runId in context
+    setHasSavedThisSession(false);
+    setIsSaving(false);
   };
 
-  const handleFinishSimulation = () => {
+  /**
+   * Primer Play → crea el Run en la BD.
+   * Pausas/reanudaciones posteriores solo hacen togglePlay.
+   */
+  const handleTogglePlay = async () => {
+    if (!runId && !isPlaying) {
+      const slug = location.pathname.split('/simulation/')[1] ?? "";
+      await dbStartRun(slug);
+    }
+    togglePlay();
+  };
+
+  const handleFinishSimulation = async () => {
     // 1. Siempre pausamos el tiempo al darle a finalizar
     if (isPlaying) {
       togglePlay();
@@ -60,19 +74,28 @@ export function TopToolbar() {
     // 3. Si es la primera vez que finalizan esta partida, guardamos los datos:
     const currentSim = simulations.find(sim => sim.path === location.pathname);
     
-    // Le agregamos Math.random() al ID por si dan doble clic rapidísimo, para que sea 100% único
     const uniqueSessionId = `sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
+    const procedureId = location.pathname.split('/simulation/')[1] ?? "unknown";
+    const puntaje = Math.floor(Math.random() * (99 - 65 + 1)) + 65;
+    const sigVitales = { fc: vitalSigns.fc, spo2: vitalSigns.spo2, temp: vitalSigns.temp };
+
+    // --- Guardar en la BD ---
+    setIsSaving(true);
+    await dbFinishRun(puntaje, sigVitales);
+    setIsSaving(false);
+
+    // --- Guardar en localStorage (backup para label/imagen en Results) ---
     const newResult = {
       sessionId: uniqueSessionId,
-      id: currentSim ? currentSim.id : "unknown",
+      id: procedureId,
       label: currentSim ? currentSim.label : "Simulación Desconocida",
       image: currentSim ? currentSim.image : "",
       fecha: new Date().toISOString(),
       duracion: elapsedSeconds,
-      puntaje: Math.floor(Math.random() * (100 - 80 + 1)) + 80, 
-      signosVitales: "Estables (115/75)", 
-      cirujano: "Dr. Invitado",
+      puntaje,
+      signosVitales: sigVitales,
+      cirujano: localStorage.getItem("auth_user_name") ?? "Dr. Invitado",
     };
 
     const existingHistory = JSON.parse(localStorage.getItem('simulation_results') || '[]');
@@ -120,7 +143,7 @@ export function TopToolbar() {
           <Tooltip>
             <TooltipTrigger asChild>
               {/* Actualizado para usar la nueva función de reset */}
-              <button onClick={handleResetSimulation} className={btnStyle} disabled={showFinishModal}>
+              <button onClick={handleResetSimulation} className={btnStyle} disabled={showFinishModal || isSaving}>
                 <RotateCcw className="w-4 h-4" />
               </button>
             </TooltipTrigger>
@@ -130,8 +153,8 @@ export function TopToolbar() {
           <Tooltip>
             <TooltipTrigger asChild>
               <button 
-                onClick={togglePlay} 
-                disabled={showFinishModal}
+                onClick={handleTogglePlay} 
+                disabled={showFinishModal || isSaving}
                 className={`flex items-center justify-center w-11 h-11 rounded-lg transition-all ${
                   isPlaying 
                     ? "bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)]" 
@@ -181,15 +204,17 @@ export function TopToolbar() {
 
           <button 
             onClick={handleFinishSimulation}
-            disabled={showFinishModal}
+            disabled={showFinishModal || isSaving}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all 
-              ${showFinishModal 
+              ${showFinishModal || isSaving
                 ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
                 : 'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/50 hover:border-emerald-400 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]'
               }`}
           >
             <Flag className="w-4 h-4" />
-            <span className="text-xs uppercase tracking-wider font-bold">Finalizar</span>
+            <span className="text-xs uppercase tracking-wider font-bold">
+              {isSaving ? "Guardando..." : "Finalizar"}
+            </span>
           </button>
         </div>
       </div>

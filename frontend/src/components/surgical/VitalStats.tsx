@@ -8,22 +8,21 @@ function formatTime(totalSeconds: number) {
 }
 
 export function VitalStats() {
-  const { elapsedSeconds } = useSimulation();
+  const { elapsedSeconds, vitalSigns } = useSimulation();
 
-  // Cambiamos las clases personalizadas por colores estándar de Tailwind con efecto "Glow"
   const stats = [
     { 
       icon: Heart, 
       label: "FC", 
-      value: "72", 
+      value: vitalSigns.fc, 
       unit: "bpm", 
       color: "text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]",
-      animate: "animate-pulse" // El corazón late
+      animate: "animate-pulse"
     },
     { 
       icon: Activity, 
       label: "SpO₂", 
-      value: "98", 
+      value: vitalSigns.spo2, 
       unit: "%", 
       color: "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]",
       animate: ""
@@ -31,7 +30,7 @@ export function VitalStats() {
     { 
       icon: Thermometer, 
       label: "Temp", 
-      value: "36.5", 
+      value: vitalSigns.temp, 
       unit: "°C", 
       color: "text-amber-500 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]",
       animate: ""
