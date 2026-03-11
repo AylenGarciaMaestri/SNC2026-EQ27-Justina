@@ -44,6 +44,10 @@ const Login: FC<LoginProps> = () => {
       }
 
       // El backend configura la cookie 'authToken' de forma segura (HttpOnly)
+      // Persistir el nombre del usuario para usarlo en los resultados de simulación
+      if (data.fullName) {
+        localStorage.setItem("auth_user_name", data.fullName);
+      }
       // Redirigir al inicio o dashboard tras un login exitoso
       navigate('/dashboard'); 
     } catch (err: any) {

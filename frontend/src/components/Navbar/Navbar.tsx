@@ -48,6 +48,7 @@ const Navbar: FC<NavbarProps> = () => {
     } catch (error) {
       console.error('Error during logout:', error);
     } finally {
+      localStorage.removeItem("auth_user_name");
       navigate('/login');
     }
   };

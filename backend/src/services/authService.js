@@ -53,6 +53,6 @@ export const login = async ({ email, password }) => {
   // Actualizar último login
   await userRepository.updateLastLogin(user.id);
 
-  return { token , userId: user.id };
+  return { token, userId: user.id, fullName: user.full_name };
 };
 

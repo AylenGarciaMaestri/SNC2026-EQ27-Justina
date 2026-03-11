@@ -22,7 +22,7 @@ export default class AuthController {
 
     static async login(req, res, next) {
         try {
-            const { token, userId } = await authService.login(req.body);
+            const { token, userId, fullName } = await authService.login(req.body);
             res.cookie(
                 'authToken', token,{
                     httpOnly: true,
@@ -33,7 +33,7 @@ export default class AuthController {
                 }
             )
 
-            res.json({ message: 'Login realizado correctamente', userId });
+            res.json({ message: 'Login realizado correctamente', userId, fullName });
         } catch (error) {
             next(error);
         }
